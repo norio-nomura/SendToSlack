@@ -1,0 +1,15 @@
+version: '3'
+services:
+  web:
+    build: 
+      context: .
+      args:
+        DOCKER_IMAGE: ${DOCKER_IMAGE:-norionomura/swift:411}
+    ports:
+      - "${PORT-8080}:${PORT-8080}"
+    env_file: .env
+    environment:
+      PORT: ${PORT:-8080}
+    volumes:
+      - .:/App
+    command: VaporApp serve --env development --port ${PORT:-8080} --hostname 0.0.0.0

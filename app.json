@@ -1,10 +1,11 @@
 {
-  "name": "Vapor App",
+  "name": "Send to Slack",
   "keywords": [
+    "slack",
     "swift",
     "vapor3"
   ],
-  "repository": "https://github.com/norio-nomura/vapor-clean",
+  "repository": "https://github.com/norio-nomura/SendToSlack",
   "stack": "container",
   "env": {
     "SLACK_WEBHOOK_URL": {

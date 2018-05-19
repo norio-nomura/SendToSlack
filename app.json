@@ -7,7 +7,7 @@
   "repository": "https://github.com/norio-nomura/vapor-clean",
   "stack": "container",
   "env": {
-    "SECRET_TOKEN": {
+    "SLACK_WEBHOOK_URL": {
       "description": "A secret token for doing your jobs.",
       "required": true
     }

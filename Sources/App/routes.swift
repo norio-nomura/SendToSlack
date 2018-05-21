@@ -4,42 +4,76 @@ import Vapor
 ///
 /// [Learn More →](https://docs.vapor.codes/3.0/getting-started/structure/#routesswift)
 public func routes(_ router: Router) throws {
-    // from DockerHub to Slack
-    router.post(DockerHubPayload.self, at: "from-docker-hub") { req, payload -> EventLoopFuture<Response> in
-        guard let slackWebhookURL = Environment.get("SLACK_WEBHOOK_URL") else {
-            return req.eventLoop.newSucceededFuture(result: req.makeResponse(http: .init(status: .internalServerError)))
-        }
+    router.post(DockerHubPayload.self, at: "from-docker-hub", use: postToSlack)
+    router.post(HerokuPayload.self, at: "from-heroku", use: postToSlack)
+}
 
-        let repoName = payload.repository.repo_name
-        let tag = payload.push_data.tag
-        let pusher = payload.push_data.pusher
-        let repoURL = payload.repository.repo_url
-        let text = "New image was pushed to \(repoName):\(tag) by \(pusher)\n\(repoURL)"
-        let slackPayload = SlackPayload(text: text, username: "dockerhub", icon_emoji: ":whale:")
-        let headers: HTTPHeaders = ["Content-Type": "application/json; charset=utf-8"]
-        return try req.client().post(slackWebhookURL, headers: headers) { try $0.content.encode(json: slackPayload) }
+// MARK: Slack
+struct SlackPayload: Encodable {
+    let text: String, username, icon_emoji: String?
+}
+
+protocol SlackPayloadConvertible {
+    func slackPayload() -> SlackPayload
+    static var webhookURL: String { get }
+}
+
+func postToSlack<T: RequestDecodable>(_ request: Request, payload: T) throws -> EventLoopFuture<Response> {
+    guard let payload = (payload as? SlackPayloadConvertible) else {
+        let response = request.makeResponse(http: .init(status: .internalServerError))
+        return request.eventLoop.newSucceededFuture(result: response)
+    }
+    let headers: HTTPHeaders = ["Content-Type": "application/json; charset=utf-8"]
+    return try request.client().post(type(of: payload).webhookURL, headers: headers) {
+        try $0.content.encode(json: payload.slackPayload())
     }
 }
 
-struct DockerHubPayload: Decodable, RequestDecodable {
+let slackWebhookURL = Environment.get("SLACK_WEBHOOK_URL")!
+
+// MARK: - from-docker-hub
+struct DockerHubPayload: Decodable, RequestDecodable, SlackPayloadConvertible {
     struct PushData: Decodable {
-        let pusher: String
-        let tag: String
+        let pusher, tag: String
     }
     struct Repository: Decodable {
-        let repo_name: String
-        let repo_url: String
+        let repo_name, repo_url: String
     }
-    let push_data: PushData
-    let repository: Repository
+    let push_data: PushData, repository: Repository
 
-    static func decode(from req: Request) throws -> Future<DockerHubPayload> {
-        return try req.content.decode(DockerHubPayload.self)
+    // SlackPayloadConvertible
+    func slackPayload() -> SlackPayload {
+        return .init(text: """
+            New image was pushed to \(repository.repo_name):\(push_data.tag) by \(push_data.pusher)
+            \(repository.repo_url)
+            """, username: "DockerHub", icon_emoji: nil)
     }
+    static let webhookURL = Environment.get("SLACK_WEBHOOK_URL_FOR_DOCKER_HUB") ?? slackWebhookURL
 }
 
-struct SlackPayload: Encodable {
-    let text: String
-    let username: String
-    let icon_emoji: String
+// MARK: - from-heroku
+struct HerokuPayload: Decodable, RequestDecodable, SlackPayloadConvertible {
+    struct App: Decodable {
+        let name: String
+    }
+    struct Data: Decodable {
+        let app: App, output_stream_url: String?, status: String
+    }
+    let action, resource: String, data: Data
+
+    // SlackPayloadConvertible
+    func slackPayload() -> SlackPayload {
+        let text = "\(data.app.name) \(action)s \(resource): \(data.status)" +
+            (data.output_stream_url.map { "\n\($0)" } ?? "")
+        return SlackPayload(text: text, username: "Heroku", icon_emoji: nil)
+    }
+
+    static let webhookURL = Environment.get("SLACK_WEBHOOK_URL_FOR_HEROKU") ?? slackWebhookURL
+}
+
+// MARK: - RequestDecodable
+extension RequestDecodable where Self: Decodable {
+    static func decode(from req: Request) throws -> Future<Self> {
+        return try req.content.decode(Self.self)
+    }
 }

@@ -9,8 +9,16 @@
   "stack": "container",
   "env": {
     "SLACK_WEBHOOK_URL": {
-      "description": "A secret token for doing your jobs.",
+      "description": "A slack webhook URL.",
       "required": true
+    },
+    "SLACK_WEBHOOK_URL_FOR_DOCKER_HUB": {
+      "description": "A slack webhook URL that used on `/from-docker-hub`",
+      "required": false
+    },
+    "SLACK_WEBHOOK_URL_FOR_HEROKU": {
+      "description": "A slack webhook URL that used on `/from-heroku`",
+      "required": false
     }
   }
 }

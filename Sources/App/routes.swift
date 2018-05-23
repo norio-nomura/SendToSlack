@@ -57,15 +57,16 @@ struct HerokuPayload: Decodable, RequestDecodable, SlackPayloadConvertible {
         let name: String
     }
     struct Data: Decodable {
-        let app: App, output_stream_url: String?, status: String
+        let app: App, id: String, status: String
     }
     let action, resource: String, data: Data
 
     // SlackPayloadConvertible
     func slackPayload() -> SlackPayload {
-        let text = "\(data.app.name) \(action)s \(resource): \(data.status)" +
-            (data.output_stream_url.map { "\n\($0)" } ?? "")
-        return SlackPayload(text: text, username: "Heroku", icon_emoji: nil)
+        return SlackPayload(text: """
+            \(data.app.name) \(action)s \(resource): \(data.status)
+            https://dashboard.heroku.com/apps/\(data.app.name)/activity/builds/\(data.id)
+            """, username: "Heroku", icon_emoji: nil)
     }
 
     static let webhookURL = Environment.get("SLACK_WEBHOOK_URL_FOR_HEROKU") ?? slackWebhookURL
